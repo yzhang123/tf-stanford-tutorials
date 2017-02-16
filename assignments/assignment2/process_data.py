@@ -14,12 +14,13 @@ import tensorflow as tf
 # Parameters for downloading data
 DOWNLOAD_URL = 'http://mattmahoney.net/dc/'
 EXPECTED_BYTES = 31344016
-DATA_FOLDER = '/Users/Chip/data/'
-FILE_NAME = 'text8.zip'
+DATA_FOLDER = ''
+FILE_NAME = 'enwik9.zip'
 
-def download(file_name, expected_bytes):
+def download(expected_bytes, file_name=FILE_NAME):
     """ Download the dataset text8 if it's not already downloaded """
     file_path = DATA_FOLDER + file_name
+    print('file_path is %s' % file_path)
     if os.path.exists(file_path):
         print("Dataset ready")
         return file_path
@@ -36,8 +37,8 @@ def read_data(file_path):
     """ Read data into a list of tokens 
     There should be 17,005,207 tokens
     """
-    with zipfile.ZipFile(file_path) as f:
-        words = tf.compat.as_str(f.read(f.namelist()[0])).split() 
+    with open(file_path, 'r') as f:
+        words = tf.compat.as_str(f.read()).split()
         # tf.compat.as_str() converts the input into the string
     return words
 
@@ -47,7 +48,7 @@ def build_vocab(words, vocab_size):
     count = [('UNK', -1)]
     count.extend(Counter(words).most_common(vocab_size - 1))
     index = 0
-    with open('processed/vocab_1000.tsv', "w") as f:
+    with open('data/vocab_1000.tsv', "w") as f:
         # f.write("Name\n")
         for word, _ in count:
             dictionary[word] = index
@@ -81,16 +82,20 @@ def get_batch(iterator, batch_size):
             center_batch[index], target_batch[index] = next(iterator)
         yield center_batch, target_batch
 
-def process_data(vocab_size, batch_size, skip_window):
-    file_path = download(FILE_NAME, EXPECTED_BYTES)
+def process_data(vocab_size, batch_size, skip_window, file_name=FILE_NAME):
+    file_path = file_name #download(EXPECTED_BYTES, file_name)
+    print('read_data(%s)' % file_path)
     words = read_data(file_path)
-    dictionary, _ = build_vocab(words, vocab_size)
+    print('build_vocab(words, %d)' % vocab_size)
+    dictionary, index_dictionary = build_vocab(words, vocab_size)
+    print('convert_words_to_index')
     index_words = convert_words_to_index(words, dictionary)
     del words # to save memory
+    print('generate_sample')
     single_gen = generate_sample(index_words, skip_window)
-    return get_batch(single_gen, batch_size)
+    return get_batch(single_gen, batch_size), dictionary, index_dictionary
 
-def get_index_vocab(vocab_size):
-    file_path = download(FILE_NAME, EXPECTED_BYTES)
+def get_index_vocab(vocab_size, file_name=FILE_NAME):
+    file_path = download(EXPECTED_BYTES, file_name)
     words = read_data(file_path)
     return build_vocab(words, vocab_size)
