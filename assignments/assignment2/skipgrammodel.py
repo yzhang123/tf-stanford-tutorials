@@ -9,6 +9,7 @@ import argparse
 from process_data import process_data
 import math
 import os
+import time
 
 from tensorflow.contrib.tensorboard.plugins import projector
 
@@ -58,6 +59,13 @@ class SkipGramModel:
     def _create_optimizer(self):
         self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss, global_step=self.global_step)
 
+    def _create_summaries(self):
+        with tf.name_scope("summaries"):
+            tf.summary.scalar("loss", self.loss)
+            tf.summary.histogram("histogram loss", self.loss)
+            self.summary_op = tf.summary.merge_all()
+
+
     def _build_graph(self):
         self._create_placeholders()
         self._create_embedding()
@@ -65,19 +73,19 @@ class SkipGramModel:
         self._create_optimizer()
         self._create_summaries()
 
-    def _create_summaries(self):
-        with tf.name_scope("summaries"):
-            tf.summary.scalar("loss", self.loss)
-            tf.summary.histogram("histogram loss", self.loss)
-            self.summary_op = tf.summary.merge_all()
-
+  
 def train_model(model, batch_gen, num_train_steps, weights_fld):
 
     saver = tf.train.Saver()
     initial_step = 0
-
+    #config = tf.ConfigProto()
+    #config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+    
+    #with tf.Session(config=config) as sess:
     with tf.Session() as sess:
         tf.global_variables_initializer().run()
+
+        # restore latest checkpoint: mapping of variable names to tensors
         ckpt = tf.train.get_checkpoint_state(os.path.dirname('checkpoints/checkpoint'))
         if ckpt and ckpt.model_checkpoint_path :
             saver.restore(sess, ckpt.model_checkpoint_path)
@@ -90,11 +98,12 @@ def train_model(model, batch_gen, num_train_steps, weights_fld):
             centers, targets = batch_gen.next()
             loss_batch, _, summary = sess.run([model.loss, model.optimizer, model.summary_op], feed_dict={model.center_words: centers, model.target_words:targets})
             writer.add_summary(summary, global_step=index)
+            writer.flush()
             total_loss += loss_batch
             if (index + 1) % SKIP_STEP == 0:
                 print('Average loss at step {}: {:5.1f}'.format(index + 1, total_loss / SKIP_STEP))
                 total_loss = 0.0
-                saver.save(sess, 'checkpoints/skip-gram', index)
+                saver.save(sess, 'checkpoints/skip-gram', global_step=model.global_step)
         writer.close()
         '''
         while True:
@@ -145,4 +154,9 @@ if __name__ == '__main__':
     model._build_graph()
     print("generating batch")
     batch_gen, dict, index_dict = process_data(args.vocab_size, args.batch_size, args.skip_window, args.data)
+    start = time.time()
+    start1 = time.clock()
     train_model(model, batch_gen, NUM_TRAIN_STEPS, WEIGHTS_FLD)
+    duration = time.time() - start
+    duration1 = time.clock() - start1
+    print("elapsed time for training: %f, %f" % (duration, duration1))
