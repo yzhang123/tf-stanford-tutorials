@@ -16,6 +16,7 @@ import tensorflow as tf
 
 import vgg_model
 import utils
+import argparse
 
 # parameters to manage experiments
 STYLE = 'guernica'
@@ -149,7 +150,7 @@ def _create_summary(model):
         summary_op = tf.summary.merge_all()
         return summary_op
 
-def train(model, generated_image, initial_image):
+def train(model, generated_image, initial_image, new):
     """ Train your model.
     Don't forget to create folders for checkpoints and outputs.
     """
@@ -169,9 +170,10 @@ def train(model, generated_image, initial_image):
         tf.global_variables_initializer().run()
         writer = tf.summary.FileWriter(GRAPH_DIR + 'lr' + str(LR), sess.graph)
         sess.run(generated_image.assign(initial_image))
-        ckpt = tf.train.get_checkpoint_state(os.path.dirname(CKPT_DIR +'checkpoint'))
-        if ckpt and ckpt.model_checkpoint_path:
-            saver.restore(sess, ckpt.model_checkpoint_path)
+        if not new: 
+            ckpt = tf.train.get_checkpoint_state(os.path.dirname(CKPT_DIR +'checkpoint'))
+            if ckpt and ckpt.model_checkpoint_path:
+                saver.restore(sess, ckpt.model_checkpoint_path)
         initial_step = model['global_step'].eval()
         
         start_time = time.time()
@@ -190,7 +192,7 @@ def train(model, generated_image, initial_image):
                 ###############################
                 #gen_image, loss, _, summary = sess.run([generated_image, model['total_loss'], model['optimizer'], model['summary_op']])
                 gen_image, loss, summary = sess.run([generated_image, model['total_loss'], model['summary_op']])
-                total_loss += loss
+                total_loss = loss
                 gen_image = gen_image + MEAN_PIXELS
                 writer.add_summary(summary, global_step=index)
                 print('Step {}\n   Sum: {:5.1f}'.format(index + 1, np.sum(gen_image)))
@@ -198,13 +200,13 @@ def train(model, generated_image, initial_image):
                 print('   Time: {}'.format(time.time() - start_time))
                 start_time = time.time()
 
-                filename = OUTPUT_DIR+'%d.png' % (index)
+                filename = OUTPUT_DIR+CONTENT+'_'+STYLE+'%d.png' % (index)
                 utils.save_image(filename, gen_image)
 
-                if (index + 1) % 20 == 0:
+                if not new and (index + 1) % 20 == 0:
                     saver.save(sess, CKPT_DIR+'/style_transfer', index)
 
-def main():
+def main(args):
     with tf.variable_scope('input') as scope:
         # use variable instead of placeholder because we're training the intial image to make it
         # look like both the content image and the style image
@@ -229,7 +231,21 @@ def main():
     model['summary_op'] = _create_summary(model)
 
     initial_image = utils.generate_noise_image(content_image, IMAGE_HEIGHT, IMAGE_WIDTH, NOISE_RATIO)
-    train(model, input_image, initial_image)
+    train(model, input_image, initial_image, args.new)
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--content', type=str, default=CONTENT)
+    parser.add_argument('--style', type=str,  default=STYLE)
+    parser.add_argument('--new', type=bool, default=False)
+    args=parser.parse_args()
+    CONTENT=args.content
+    STYLE=args.style
+    STYLE_IMAGE = 'styles/' + STYLE + '.jpg'
+    CONTENT_IMAGE = 'content/' + CONTENT + '.jpg'
+    print('content: %s' % CONTENT_IMAGE)
+    print('style: %s' % STYLE_IMAGE)
+    print('new: %s' % args.new)
+
+
+    main(args)
