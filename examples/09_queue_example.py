@@ -32,6 +32,8 @@ with tf.Session() as sess:
 		if coord.should_stop():
 			break
 		data_batch, label_batch = sess.run([data_sample, label_sample])
+        print(data_batch)
+        print(label_batch)
 	coord.request_stop()
 	coord.join(enqueue_threads)
 
